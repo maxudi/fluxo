@@ -123,7 +123,7 @@ app.use('/api', (_req, res) => res.status(404).json({ error: 'Rota não encontra
 
 // ── Frontend estático ──────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, '../dist')))
-app.get('*', (_req, res) => {
+app.get('/{*splat}', (_req, res) => {
   res.sendFile(path.join(__dirname, '../dist/index.html'))
 })
 
