@@ -4,12 +4,20 @@ import { useAuth } from '../context/AuthContext'
 
 export default function Admin() {
   const { user, getToken } = useAuth()
+  const [tab, setTab] = useState('users')
+
+  // ── Usuários ──
   const [users, setUsers] = useState([])
   const [loadError, setLoadError] = useState('')
   const [form, setForm] = useState({ username: '', password: '', role: 'user' })
   const [formError, setFormError] = useState('')
   const [formOk, setFormOk] = useState('')
   const [saving, setSaving] = useState(false)
+
+  // ── Logs ──
+  const [logs, setLogs] = useState([])
+  const [logsError, setLogsError] = useState('')
+  const [logsLoading, setLogsLoading] = useState(false)
 
   // Somente admin acessa esta página
   if (user?.role !== 'admin') return <Navigate to="/" replace />
@@ -28,7 +36,25 @@ export default function Admin() {
     }
   }, [getToken])
 
+  const fetchLogs = useCallback(async () => {
+    setLogsError('')
+    setLogsLoading(true)
+    try {
+      const res = await fetch('/api/logs', {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      })
+      const data = await res.json()
+      if (!res.ok) setLogsError(data.error ?? 'Erro ao carregar log')
+      else setLogs(data)
+    } catch {
+      setLogsError('Erro de conexão')
+    } finally {
+      setLogsLoading(false)
+    }
+  }, [getToken])
+
   useEffect(() => { fetchUsers() }, [fetchUsers])
+  useEffect(() => { if (tab === 'logs') fetchLogs() }, [tab, fetchLogs])
 
   async function handleCreate(e) {
     e.preventDefault()
@@ -77,12 +103,35 @@ export default function Admin() {
   const roleLabel = r => (r === 'admin' ? 'Administrador' : 'Usuário')
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-8">
+    <div className="p-6 max-w-4xl mx-auto space-y-6">
       {/* Título */}
       <div>
-        <h1 className="text-xl font-bold text-slate-800">Gerenciamento de Usuários</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Crie e remova contas de acesso ao sistema.</p>
+        <h1 className="text-xl font-bold text-slate-800">Administração</h1>
+        <p className="text-sm text-slate-500 mt-0.5">Gerencie usuários e monitore acessos ao sistema.</p>
       </div>
+
+      {/* Abas */}
+      <div className="flex gap-1 border-b border-slate-200">
+        {[
+          { id: 'users', label: 'Usuários' },
+          { id: 'logs',  label: 'Log de Acessos' },
+        ].map(t => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
+              tab === t.id
+                ? 'border-[#0f3973] text-[#0f3973]'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Aba: Usuários ── */}
+      {tab === 'users' && (<>
 
       {/* Formulário de criação */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -214,6 +263,66 @@ export default function Admin() {
           </table>
         )}
       </div>
+      </>)}
+
+      {/* ── Aba: Log de Acessos ── */}
+      {tab === 'logs' && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-700">Últimos 1000 acessos</h2>
+            <button
+              onClick={fetchLogs}
+              disabled={logsLoading}
+              className="text-xs text-[#0f3973] hover:underline disabled:opacity-50"
+            >
+              {logsLoading ? 'Carregando...' : 'Atualizar'}
+            </button>
+          </div>
+
+          {logsError && (
+            <p className="px-5 py-4 text-sm text-red-600">{logsError}</p>
+          )}
+
+          {!logsError && !logsLoading && logs.length === 0 && (
+            <p className="px-5 py-4 text-sm text-slate-400">Nenhum acesso registrado ainda.</p>
+          )}
+
+          {logs.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">
+                    <th className="px-5 py-3">Data / Hora</th>
+                    <th className="px-5 py-3">Usuário</th>
+                    <th className="px-5 py-3">IP</th>
+                    <th className="px-5 py-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {logs.map((entry, i) => (
+                    <tr key={i} className="hover:bg-slate-50">
+                      <td className="px-5 py-2.5 text-slate-500 text-xs whitespace-nowrap">
+                        {entry.ts ? new Date(entry.ts).toLocaleString('pt-BR') : '—'}
+                      </td>
+                      <td className="px-5 py-2.5 font-medium text-slate-800">{entry.username}</td>
+                      <td className="px-5 py-2.5 text-slate-500 font-mono text-xs">{entry.ip}</td>
+                      <td className="px-5 py-2.5">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          entry.status === 'OK'
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : 'bg-red-50 text-red-600'
+                        }`}>
+                          {entry.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

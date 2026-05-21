@@ -1,6 +1,7 @@
 import express from 'express'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import fs from 'fs/promises'
 import rateLimit from 'express-rate-limit'
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
@@ -115,6 +116,29 @@ app.delete('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
     res.json({ ok: true })
   } catch (err) {
     res.status(400).json({ error: err.message })
+  }
+})
+
+// ── Log de acessos (somente admin) ───────────────────────────────
+const LOG_FILE = path.join(process.env.DATA_DIR ?? path.join(process.cwd(), 'data'), 'access.log')
+
+app.get('/api/logs', requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    const text = await fs.readFile(LOG_FILE, 'utf8')
+    const lines = text.trim().split('\n').filter(Boolean)
+    const entries = lines.slice(-1000).reverse().map(line => {
+      const parts = line.split(' | ')
+      return {
+        ts: parts[0]?.trim() ?? '',
+        ip: parts[1]?.trim() ?? '',
+        username: parts[2]?.trim() ?? '',
+        status: parts[3]?.trim() ?? '',
+      }
+    })
+    res.json(entries)
+  } catch (err) {
+    if (err.code === 'ENOENT') return res.json([])
+    res.status(500).json({ error: 'Erro ao ler log' })
   }
 })
 
